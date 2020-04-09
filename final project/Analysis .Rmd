@@ -1,0 +1,28 @@
+---
+title: "PS 811 Final Project"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Final Project Analysis Plan
+This is an anlysis for a survey experiment I conducted. The analysis will look at the relationship between social norm perception and intention of behavior in the context of social influential message of marijuana use. The study has 3 hypotheses and 1 research question. I plan to 
+1) clean and re-organize the data based on a between subject design (dummy code?)
+2) Conduct one multiple regression based on hypothesis 1
+3) conduct mediation analysis on top of the multiple regression model from 1) 
+4) (Compare the two model's R squared??)
+Here are my plans for now. Since I am using this for a class paper, I am hoping to finish the analysis as early as possible, may need some help in the regression interpretation and visualization part. 
+
+```{r}
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+
+```
+
+
