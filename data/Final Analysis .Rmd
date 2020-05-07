@@ -1,0 +1,223 @@
+---
+title: "PS 811/813 Final Project"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The present study investigated the relationship between descriptive norm of marijuana use, intent, and resistance to peer pressure among college students in the marijuana context. 
+
+The main analyses test a series of hypotheses with a univariate approach. The first ANOVA analysis compared level of descriptive norm of marijuana use across all four conditions and detect if there is any significant difference. The second ANOVA compared level of intent to smoke marijuana across all four conditions to detect if there is any significant difference. The final set of analyses used generalized linear model (GLM) to detect if a resistance to peer pressure is a significant moderator that moderates the relationship between descriptive norm of marijuana use and intent to smoke marijuana. 
+
+H1: College students’ perception of marijuana smoking norm of their peers will differ after being exposed to different marijuana expectancy norms (beneficial, harmful, mix)
+
+H2:College students’ intent to smoke marijuana will differ after being exposed to different marijuana expectancy norms (beneficial, harmful, mix).
+
+H3:College students’ perception of the norm will predict intent to smoke marijuana, moderated by susceptibility to peer pressure.
+
+# Clean data
+Required Packages
+```{r}
+library("here")
+library("tidyverse")
+library("broom")
+library("psych")
+library("reghelper")
+```
+## Import Data
+
+```{r}
+data <- read_csv(here("final_data.csv"))
+# delete empty data
+d1 <- data %>% filter(!is.na(Q7.2_8))
+d1 <- d1 %>% slice(-1)
+```
+## recode variables 
+susceptibility to peer influence (Q5.1_1 - Q5.1_7)
+(recode, cronbach's alpha, impute null responses) 
+```{r}
+d1 <- d1 %>%
+  mutate_at(c("Q5.1_1", "Q5.1_2", "Q5.1_3", "Q5.1_4", "Q5.1_5", "Q5.1_6", "Q5.1_7"),
+        recode, 
+               "Definitely yes" = 5, 
+               "Probably yes" = 4,
+               "Might or might not" = 3,
+               "Probably not" = 2,
+               "Definitely not" = 1,
+               .default = NaN
+               )
+
+grep("Q5.1_1", colnames(d1))
+alpha1 <- alpha(d1[, grep("Q5.1_1", colnames(d1)): grep("Q5.1_7", colnames(d1))])
+alpha1
+
+vars2 <- c("Q5.1_1", "Q5.1_2", "Q5.1_3", "Q5.1_4", "Q5.1_5", "Q5.1_6", "Q5.1_7")
+d1 <- d1%>% mutate(
+  suscep_mean = rowMeans(select(., vars2)))
+ave2 <- colMeans(d1[grep("suscep_mean", colnames(d1))], na.rm = TRUE)
+d1 <- d1 %>% 
+  mutate(suscep_meanimpute = ifelse(is.na(suscep_mean), ave2, suscep_mean))
+
+```
+## Norm perception 
+(recode, cronbach's alpha, impute null responses) 
+
+```{r}
+d1 <- d1 %>% 
+  mutate_at(c("Q14.1#1_1", "Q14.1#1_2", "Q14.1#1_3"),
+              recode,
+                "Almost everyday" = 6,
+                "About once a week" = 5,
+                "A few times a month" = 4,
+                "A few times a year" = 3,
+                "Once a year" = 2,
+                "Never" = 1,
+                .default = NaN
+              )
+
+alpha2 <- alpha(d1[, grep("Q14.1#1_1", colnames(d1)): grep("Q14.1#1_2", colnames(d1))])
+alpha2
+
+vars1 <- c("Q14.1#1_1", "Q14.1#1_2")
+
+d1 <- d1%>% mutate(
+      desnorm_mean = rowMeans(select(., vars1)))
+      
+ave1 <- colMeans(d1[grep("desnorm_mean", colnames(d1))], na.rm = TRUE)
+d1 <- d1 %>% 
+  mutate(desnorm_meanimpute = ifelse(is.na(desnorm_mean), ave1, desnorm_mean))
+```
+## intention of behavior 
+(recode, cronbach's alpha, impute null responses)
+```{r}
+d1 <- d1 %>% 
+  mutate_at(c("Q15.1_1", "Q15.1_2", "Q15.1_3", "Q15.1_4",	"Q15.1_5"),
+              recode,
+                "Strongly Disagree" = 1,
+                "Disagree" = 2,
+                "Somewhat disagree" = 3,
+                "Neither agree nor disagree" = 4,
+                "Somewhat agree" = 5,
+                "Agree" = 6,
+                "Strongly agree" = 7,
+                .default = NaN,
+            
+              )
+alpha3 <- alpha(d1[, grep("Q15.1_1", colnames(d1)): grep("Q15.1_5", colnames(d1))])
+alpha3
+d1$Q15.1_3 <- 8 - d1$Q15.1_3
+
+vars3 <- c("Q15.1_1", "Q15.1_2", "Q15.1_3", "Q15.1_4","Q15.1_5")
+d1 <- d1%>% mutate(
+  intent_mean = rowMeans(select(., vars3), na.rm = TRUE))
+
+ave3 <- colMeans(d1[grep("intent_mean", colnames(d1))], na.rm = TRUE)
+d1 <- d1 %>% 
+  mutate(intent_meanimpute = ifelse(is.na(intent_mean), ave3, desnorm_mean))
+
+```
+## Recode Condition variable 
+(pro=1, con=2, mix=3, control=4)
+
+```{r}
+d1 <- d1 %>% 
+  mutate(
+    condition = (
+     case_when(
+       `stimuli_pro-pro_DO` != 0 ~ 1 ,
+       `stimuli_con-con_DO` != 0 ~ 2 ,
+       `conditionstimuli_pro-con(1)_DO` != 0 ~ 3 ,
+       `Controlcondition_DO` != 0 ~ 4
+     ) 
+    )
+  )
+```
+## Covariates
+Age, Gender, Political Interest
+
+```{r}
+d1 <- d1 %>% mutate(
+    gender = case_when(
+      Q18.2 ==  "Female" ~ 0,
+      Q18.2 == "Male" ~ 1
+    )
+)
+
+d1 <- d1 %>% mutate(
+  political = case_when(
+    Q18.4 == "Strong Democrat" | Q18.4 == "Democrat" | Q18.4 == "Lean Democrat" ~ 0,
+    Q18.4 == "Independent" ~ 1,
+    Q18.4 == "Lean Republican" | Q18.4 == "Republican" | Q18.4 == "Strong Republican" ~ 2
+  )
+)
+
+d1$age <- as.numeric(d1$Q18.1_1)
+```
+## Descrptive Statistics
+
+```{r}
+d1 %>%
+  group_by("desnorm_meanimpute") %>% 
+  summarise(
+    mean = mean(desnorm_meanimpute),
+    SD = sd(desnorm_meanimpute)
+  )
+
+d1 %>%
+  group_by("intent_meanimpute") %>% 
+  summarise(
+    mean = mean(intent_meanimpute),
+    SD = sd(intent_meanimpute)
+  )
+
+```
+# Regression Analysis
+## ANOVA 1
+```{r}
+ano1 <- aov(desnorm_meanimpute ~ condition, data = d1)
+tidy(ano1)
+glance(ano1)
+par(mfrow = c(2,2))
+plot(ano1)
+```
+ To test the hypothesis how exposure to beneficial, harmful, or both messages will impact individuals’ norm perception of marijuana use, an one-way ANOVA analysis was conducted. The one-way ANOVA test was not significant F(1, 288) = 0.684, p = .409. This result indicates that after exposure to the four experimental conditions, participants’ norm perception of  marijuana use did not differ from each other. Therefore, H1 was rejected.
+
+## ANOVA 2
+```{r}
+ano2 <- aov(intent_meanimpute ~ condition, data = d1)
+tidy(ano2)
+glance(ano1)
+par(mfrow = c(2,2))
+plot(ano1)
+```
+ To test the hypothesis how exposure to beneficial, harmful, or both messages will impact individuals’ intent to use marijuana, an one-way ANOVA analysis was conducted. The one-way ANOVA test was also not significant F(1, 288) = 0.244,  p = 0.622. This result indicates that after exposure to the four experimental conditions, participants’ intent to smoke marijuana did not differ from each other. Thus, H2 was rejected. 
+
+## GLM 1
+```{r}
+lm3 <- lm(intent_meanimpute ~ desnorm_meanimpute + suscep_meanimpute + 
+            desnorm_meanimpute * suscep_meanimpute +
+            age + gender + political, data = d1)
+tidy(lm3)
+glance(lm3)
+```
+## Check Assumptions
+```{r}
+augment(lm3) %>% 
+  ggplot(aes(x = .fitted, y = .resid)) + 
+  geom_point(alpha = 0.2) +
+  stat_smooth(method="loess", col = "#00BCD8")+
+  geom_hline(yintercept=0, col="#00BCD8", linetype="dashed") +
+  theme_bw()
+
+augment(lm3) %>% 
+  ggplot(aes(sample=.fitted)) +
+  stat_qq() + 
+  geom_qq_line(line.p = c(0.25, 0.75), col = "#00BCD8") +
+  theme_bw()
+
+```
+ To examine if resistance to peer pressure serves as a moderator between norm perception of marijuana use and intent to smoke marijuana, a generalized linear regression model was used. In this model, the three independent variables are: norm perception of marijuana use, resistance to peer pressure, and the interaction between norm perception of marijuana use and resistance to peer pressure. Intent to smoke marijuana is the dependent variable. Inconsistent with our hypothesis, after controlling for covariates, there was not a significant interaction between resistance to peer pressure and norm perception of marijuana use, b = 0.016, p = 0.251 (see Table 3). 
+ This result indicates that in our sample, resistance to peer pressure does not function as an individual difference that may moderate the relationship between norm perception of marijuana use and intent to smoke marijuana. 
+ However, there is a significant relationship between norm perception of marijuana use and intent to smoke marijuana, b = 0.937, p < 0.001. Because the coefficient is positive, this result shows that under the condition that other independent variables and covariates stay the same, one unit increase in norm perception of marijuana use will lead to 0.981 unit increase in intent to smoke marijuana. As both variables were coded that higher number would indicate more often or higher desire, this result shows that as the norm perception of marijuana use becomes higher, one’s intent to smoke marijuana is also higher, regardless of their level of resistance to peer pressure or demographic variations. 
